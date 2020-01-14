@@ -1,0 +1,329 @@
+
+4th_Class_20_12_2019
+@@@@@@@@@@@@@@@@@@@@
+
+Lesson:05
+---------
+conn sys/sys123@orcl as sysdba
+
+conn hr/hr
+conn hr/hr@orcl
+
+conn hr/hr@localhost:1521/orcl
+
+D:\app\Administrator\product\12.2.0\dbhome_1\network\admin\listener.ora --- LIstener
+
+D:\app\Administrator\product\12.2.0\dbhome_1\network\admin\tnsnames.ora ---  for Database
+
+
+lis150dba1  - 1540
+
+lis150dba2  - 1541
+
+D:\app\Administrator\product\12.2.0\dbhome_1  --- Database Home Location
+
+
+Net manager
+
+
+lis150dba1  - 1540
+
+
+conn hr/hr@localhost:1521/orcl
+
+
+Lesson:06
+---------
+
+
+
+
+Lesson 06 Administering User Security-12c DBA-150(20-12-2019)
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+
+@@@@@@@@@@ User Information @@@@@@@@@@@@@@@@@@
+
+desc      dba_users
+
+select    distinct USERNAME,PASSWORD,USER_ID,ACCOUNT_STATUS,
+          LOCK_DATE,EXPIRY_DATE,DEFAULT_TABLESPACE,TEMPORARY_TABLESPACE,CREATED,PROFILE
+from      dba_users
+order  by USERNAME;
+
+select    distinct USERNAME,PASSWORD,USER_ID,ACCOUNT_STATUS,
+          LOCK_DATE,EXPIRY_DATE,DEFAULT_TABLESPACE,TEMPORARY_TABLESPACE,CREATED,PROFILE
+from      dba_users
+WHERE     USERNAME IN('SYS','SYSTEM','SYSBACKUP','SYSDG','SYSKM');
+order  by USERNAME;
+
+CONN system/sys123@orcl as sysdba
+
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+
+utlpwdmg.sql script:
+
+D:\app\Administrator\product\12.2.0\dbhome_1\rdbms\admin\utlpwdmg.sql
+
+
+ORA12C VERIFY FUNCTION
+======================
+
+As a SYS user:
+
+verify_function_12c_DBA150
+
+create or replace FUNCTION verify_function_12c_DBA150
+(username varchar2,
+ password varchar2,
+ old_password varchar2)
+RETURN boolean 
+IS
+   differ            integer;
+   db_name           varchar2(40);
+   i                 integer;
+   i_char            varchar2(10);
+   simple_password   varchar2(10);
+   reverse_user      dbms_id;
+   canon_username    dbms_id := username;
+BEGIN
+   -- Bug 22369990: Dbms_Utility may not be available at this point, so switch
+   -- to dynamic SQL to execute canonicalize procedure.
+   IF (substr(username,1,1) = '"') THEN
+     execute immediate 'begin dbms_utility.canonicalize(:p1,  :p2, 128); end;'
+                        using IN username, OUT canon_username;
+   END IF;
+   IF NOT ora_complexity_check(password, chars => 3, letter => 1, digit => 1) THEN
+      RETURN(FALSE);
+   END IF;
+
+   -- Check if the password is same as the username or username(1-100)
+   IF NLS_LOWER(password) = NLS_LOWER(canon_username) THEN
+     raise_application_error(-20002, 'Password same as or similar to user');
+   END IF;
+   FOR i IN 1..100 LOOP
+      i_char := to_char(i);
+      if NLS_LOWER(canon_username)|| i_char = NLS_LOWER(password) THEN
+        raise_application_error(-20005, 'Password same as or similar to ' ||
+                                        'username ');
+      END IF;
+   END LOOP;
+
+   -- Check if the password is same as the username reversed
+   FOR i in REVERSE 1..length(canon_username) LOOP
+     reverse_user := reverse_user || substr(canon_username, i, 1);
+   END LOOP;
+   IF NLS_LOWER(password) = NLS_LOWER(reverse_user) THEN
+     raise_application_error(-20003, 'Password same as username reversed');
+   END IF;
+
+   -- Check if the password is the same as server name and or servername(1-100)
+   select name into db_name from sys.v$database;
+   if NLS_LOWER(db_name) = NLS_LOWER(password) THEN
+      raise_application_error(-20004, 'Password same as or similar ' ||
+                                      'to server name');
+   END IF;
+   FOR i IN 1..100 LOOP
+      i_char := to_char(i);
+      if NLS_LOWER(db_name)|| i_char = NLS_LOWER(password) THEN
+        raise_application_error(-20005, 'Password same as or similar ' ||
+                                        'to server name ');
+      END IF;
+   END LOOP;
+
+   -- Check if the password is too simple. A dictionary of words may be
+   -- maintained and a check may be made so as not to allow the words
+   -- that are too simple for the password.
+   IF NLS_LOWER(password) IN ('nur1','welcome1', 'database1', 'account1', 'user1234',
+                              'password1', 'oracle123', 'computer1',
+                              'abcdefg1', 'change_on_install') THEN
+      raise_application_error(-20006, 'Vahi! Ai Password deowa Jabe na');
+   END IF;
+
+   -- Check if the password is the same as oracle (1-100)
+    simple_password := 'oracle';
+    FOR i IN 1..100 LOOP
+      i_char := to_char(i);
+      if simple_password || i_char = NLS_LOWER(password) THEN
+        raise_application_error(-20006, 'Password too simple ');
+      END IF;
+    END LOOP;
+
+   -- Check if the password differs from the previous password by at least
+   -- 3 letters
+   IF old_password IS NOT NULL THEN
+     differ := ora_string_distance(old_password, password);
+     IF differ < 3 THEN
+         raise_application_error(-20011, 'Password should differ from the ' ||
+                                 'old password by at least 3 characters');
+     END IF;
+   END IF;
+
+   RETURN(TRUE);
+END verify_function_12c_DBA150;
+/
+
+
+GRANT EXECUTE ON verify_function_12c_DBA150 TO PUBLIC;
+
+
+@@@@@@@@@@@@@@@@@@
+
+desc     dba_profiles;
+
+select   distinct profile
+from     dba_profiles
+order by PROFILE;
+
+select   distinct profile,RESOURCE_NAME,RESOURCE_TYPE,LIMIT,COMMON,INHERITED,IMPLICIT
+from     dba_profiles
+order by PROFILE;
+
+select   * 
+from     dba_profiles
+order by PROFILE;
+
+ALTER PROFILE "DEFAULT" LIMIT 
+
+	--resource parameter
+
+CPU_PER_SESSION UNLIMITED
+CPU_PER_CALL UNLIMITED
+CONNECT_TIME UNLIMITED
+IDLE_TIME UNLIMITED
+SESSIONS_PER_USER UNLIMITED
+LOGICAL_READS_PER_SESSION UNLIMITED
+LOGICAL_READS_PER_CALL UNLIMITED
+PRIVATE_SGA UNLIMITED
+COMPOSITE_LIMIT UNLIMITED
+
+	-- password parameter
+
+PASSWORD_LIFE_TIME 180
+PASSWORD_GRACE_TIME 7
+PASSWORD_REUSE_MAX UNLIMITED
+PASSWORD_REUSE_TIME UNLIMITED
+PASSWORD_LOCK_TIME 1
+FAILED_LOGIN_ATTEMPTS 10
+PASSWORD_VERIFY_FUNCTION verify_function_12c_DBA150;
+
+
+create user dba150 identified by nur1;
+
+create user dba150 identified by 123;
+
+create     user dba150
+identified by Dba150123
+profile    DBA150_PROFILE_1;
+
+
+@@@@@@@@ DBA150_PROFILE_1 @@@@@@@@@@
+
+CREATE PROFILE DBA150_PROFILE_1
+LIMIT CPU_PER_SESSION DEFAULT
+CPU_PER_CALL DEFAULT
+CONNECT_TIME DEFAULT
+IDLE_TIME DEFAULT
+SESSIONS_PER_USER 2
+LOGICAL_READS_PER_SESSION DEFAULT
+LOGICAL_READS_PER_CALL DEFAULT
+PRIVATE_SGA DEFAULT
+COMPOSITE_LIMIT DEFAULT
+PASSWORD_LIFE_TIME 2
+PASSWORD_GRACE_TIME 3
+PASSWORD_REUSE_MAX DEFAULT
+PASSWORD_REUSE_TIME DEFAULT
+PASSWORD_LOCK_TIME 1
+FAILED_LOGIN_ATTEMPTS 2
+PASSWORD_VERIFY_FUNCTION verify_function_12c_DBA150;
+
+@@@@@@@@ BY Default Profile in 12c Database @@@@@@@@@@
+
+ALTER PROFILE "DEFAULT" LIMIT CPU_PER_SESSION UNLIMITED
+CPU_PER_CALL UNLIMITED
+CONNECT_TIME UNLIMITED
+IDLE_TIME UNLIMITED
+SESSIONS_PER_USER UNLIMITED
+LOGICAL_READS_PER_SESSION UNLIMITED
+LOGICAL_READS_PER_CALL UNLIMITED
+PRIVATE_SGA UNLIMITED
+COMPOSITE_LIMIT UNLIMITED
+PASSWORD_LIFE_TIME 180
+PASSWORD_GRACE_TIME 7
+PASSWORD_REUSE_MAX UNLIMITED
+PASSWORD_REUSE_TIME UNLIMITED
+PASSWORD_LOCK_TIME 1
+FAILED_LOGIN_ATTEMPTS 10
+PASSWORD_VERIFY_FUNCTION NULL;
+ 
+
+==================
+
+alter      user hr 
+identified by hr
+quota 10M on users;
+
+
+alter      user hr 
+identified by hr
+quota unlimited on users;
+
+show parameter O7_DICTIONARY_ACCESSIBILITY;
+
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+
+Lesson: 07
+==========
+
+desc   dba_tablespace
+
+select TABLESPACE_NAME 
+from   dba_tablespaces;
+
+desc   v$tablespace;
+select name 
+from   v$tablespace;
+
+show parameter tablespace -- No Show TableSpace Quantity
+
+desc   dba_data_files;
+
+select TABLESPACE_NAME 
+from   dba_data_files;
+
+desc   v$datafile;
+
+select name 
+from   v$datafile;
+
+create tablespace dba150_tbs_1
+datafile 'D:\APP\ADMINISTRATOR\ORADATA\ORCL\dba150_tbs_1.DBF'
+size 10M
+autoextend on;
+
+ALTER TABLESPACE dba150_tbs_1
+ADD DATAFILE 'D:\APP\ADMINISTRATOR\ORADATA\ORCL\dba150_tbs_2.DBF' 
+SIZE 2M
+AUTOEXTEND ON
+NEXT 1M
+MAXSIZE 25M
+/
+
+ALTER DATABASE DATAFILE  
+'D:\APP\ADMINISTRATOR\ORADATA\ORCL\dba150_tbs_1.DBF' 
+RESIZE 12M;
+
+SELECT tablespace_name, status, contents, logging,extent_management, 
+       allocation_type,segment_space_management
+FROM   dba_tablespaces;
+
+
+DROP TABLESPACE dba150_tbs_1; --This drop option can't drop physical datafile
+
+
+If you Drop a Tablespace & with Drop physical datafile Then
+
+
+DROP TABLESPACE dba150_tbs_1 INCLUDING CONTENTS AND DATAFILES;
+
+show parameter DB_RECOVERY_FILE_DEST
+
